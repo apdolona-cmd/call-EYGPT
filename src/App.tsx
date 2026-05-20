@@ -68,11 +68,11 @@ function App({ onReady }: AppProps) {
 
   // شاشات المكالمات
   if (peer.callState === 'ringing') {
-    return <IncomingCallScreen callerName={peer.remoteName} callerNumber={peer.remoteNumber} onAnswer={peer.answerCall} onReject={peer.rejectCall} settings={settings} />;
+    return <IncomingCallScreen callerName={peer.remoteName} callerNumber={peer.remoteNumber} callerAvatar={peer.remoteAvatar} onAnswer={peer.answerCall} onReject={peer.rejectCall} settings={settings} />;
   }
 
   if (peer.callState === 'calling' || peer.callState === 'connected' || peer.callState === 'ended') {
-    return <ActiveCallScreen state={peer.callState} remoteName={peer.remoteName} remoteNumber={peer.remoteNumber} duration={peer.callDuration}
+    return <ActiveCallScreen state={peer.callState} remoteName={peer.remoteName} remoteNumber={peer.remoteNumber} remoteAvatar={peer.remoteAvatar} duration={peer.callDuration}
       isMuted={peer.isMuted} isSpeaker={peer.isSpeaker} onHangUp={peer.hangUp} onToggleMute={peer.toggleMute} onToggleSpeaker={peer.toggleSpeaker} settings={settings} />;
   }
 
@@ -138,7 +138,7 @@ function App({ onReady }: AppProps) {
         {tab === 'dialer' && <DialerTab onCall={peer.makeCall} settings={settings} />}
         {tab === 'contacts' && <ContactsTab onCall={peer.makeCall} settings={settings} />}
         {tab === 'history' && <HistoryTab logs={peer.callLog} onCall={peer.makeCall} onClear={peer.clearCallLog} settings={settings} />}
-        {tab === 'settings' && <SettingsTab myName={peer.myName} myNumber={peer.myNumber} onNameChange={peer.updateMyName} settings={settings} />}
+        {tab === 'settings' && <SettingsTab myName={peer.myName} myNumber={peer.myNumber} myAvatar={peer.myAvatar} onNameChange={peer.updateMyName} onAvatarChange={peer.updateMyAvatar} settings={settings} />}
       </main>
 
       {/* Nav */}

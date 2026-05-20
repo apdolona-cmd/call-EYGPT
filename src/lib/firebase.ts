@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
-import { getDatabase, ref, set, onValue, type Database, onDisconnect } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+import { getDatabase, ref, set, onValue, type Database } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
 export interface SiteSettings {
   siteName: string;
@@ -9,6 +9,7 @@ export interface SiteSettings {
   logoUrl: string;
   adminPassword: string;
   lastUpdate?: number;
+  updatedBy?: string;
 }
 
 const DEFAULT: SiteSettings = {
@@ -19,6 +20,7 @@ const DEFAULT: SiteSettings = {
   logoUrl: '',
   adminPassword: '01147497465',
   lastUpdate: 0,
+  updatedBy: 'system',
 };
 
 // ===== Firebase Init =====
@@ -35,13 +37,17 @@ const firebaseConfig = {
 
 let app: any;
 let db: Database;
+let isFirebaseReady = false;
 
 try {
   app = initializeApp(firebaseConfig);
   db = getDatabase(app);
-  console.log('✅ Firebase initialized successfully');
+  isFirebaseReady = true;
+  const timestamp = new Date().toLocaleTimeString('ar-EG');
+  console.log(`%c✅ Firebase initialized [${timestamp}]`, 'color: green; font-weight: bold;');
+  console.log('🗄️ Database URL:', firebaseConfig.databaseURL);
 } catch (err) {
-  console.error('❌ Firebase initialization error:', err);
+  console.error('%c❌ Firebase initialization error:', 'color: red; font-weight: bold;', err);
 }
 
 let _cloudOk = false;
@@ -68,10 +74,15 @@ function setLocal(s: SiteSettings) {
 
 // ===== حفظ فوري محلياً وفي Firebase =====
 export async function saveSettingsInstant(partial: Partial<SiteSettings>): Promise<SiteSettings> {
+  if (!isFirebaseReady) {
+    console.warn('%c⚠️ Firebase not ready yet', 'color: orange;');
+  }
+
   const merged: SiteSettings = { 
     ...getLocal(), 
     ...partial,
-    lastUpdate: Date.now()
+    lastUpdate: Date.now(),
+    updatedBy: 'admin'
   };
   
   // حفظ محلياً فوراً
@@ -79,27 +90,37 @@ export async function saveSettingsInstant(partial: Partial<SiteSettings>): Promi
   document.body.style.backgroundColor = merged.bgColor;
   document.title = merged.siteName;
   
+  console.log('%c💾 Saving to Firebase...', 'color: blue; font-weight: bold;', merged);
+
   // حفظ في Firebase Realtime Database
   if (!db) {
-    console.warn('⚠️ Firebase not initialized');
+    console.warn('%c⚠️ Firebase database not initialized', 'color: orange;');
     return merged;
   }
 
   try {
-    await set(ref(db, 'config/site'), {
+    // تأكد من الكتابة
+    const dbRef = ref(db, 'config/site');
+    await set(dbRef, {
       siteName: merged.siteName,
       primaryColor: merged.primaryColor,
       secondaryColor: merged.secondaryColor,
       bgColor: merged.bgColor,
       logoUrl: merged.logoUrl,
       adminPassword: merged.adminPassword,
-      lastUpdate: merged.lastUpdate
+      lastUpdate: merged.lastUpdate,
+      updatedBy: merged.updatedBy,
+      deviceId: getDeviceId()
     });
+    
+    const timestamp = new Date().toLocaleTimeString('ar-EG');
+    console.log(`%c✅ Successfully saved to Firebase [${timestamp}]`, 'color: green; font-weight: bold;');
+    console.log('📤 Saved data:', merged);
     _cloudOk = true;
-    console.log('✅ تم الحفظ في Firebase بنجاح');
   } catch (err) {
     _cloudOk = false;
-    console.error('❌ خطأ في الحفظ في Firebase:', err);
+    console.error('%c❌ Error saving to Firebase:', 'color: red; font-weight: bold;', err);
+    console.log('📝 Fallback: Data saved locally');
   }
   
   return merged;
@@ -161,21 +182,23 @@ export function isCloudOk() {
 
 // الاستماع لتغييرات Firebase بشكل فوري (REAL-TIME)
 export function startCloudListener(cb: (s: SiteSettings) => void) {
-  if (!db) {
-    console.warn('⚠️ Firebase not initialized');
+  if (!isFirebaseReady || !db) {
+    console.warn('%c⚠️ Firebase not ready, cannot start listener', 'color: orange;');
+    // Fallback: استخدم البيانات المحلية
+    const local = getLocal();
+    cb(local);
     return () => {};
-  }
-
-  if (_unsubscribe) {
-    console.log('🔄 Stopping previous listener');
-    _unsubscribe();
   }
 
   const settingsRef = ref(db, 'config/site');
   
-  console.log('📡 Starting real-time listener...');
+  const timestamp = new Date().toLocaleTimeString('ar-EG');
+  console.log(`%c📡 Starting real-time listener [${timestamp}]`, 'color: purple; font-weight: bold;');
+  console.log('🎯 Listening to:', settingsRef.path);
   
-  _unsubscribe = onValue(
+  let isFirstLoad = true;
+  
+  const unsubscribe = onValue(
     settingsRef,
     (snapshot) => {
       try {
@@ -191,27 +214,37 @@ export function startCloudListener(cb: (s: SiteSettings) => void) {
           cb(data);
           _cloudOk = true;
           
-          const timestamp = new Date(data.lastUpdate).toLocaleTimeString('ar-EG');
-          console.log(`✅ تم استقبال التحديث من Firebase [${timestamp}]`, data);
+          const timestamp = new Date().toLocaleTimeString('ar-EG');
+          const stage = isFirstLoad ? '📥 Initial' : '🔄 Updated';
+          console.log(
+            `%c✅ ${stage} [${timestamp}]`,
+            'color: green; font-weight: bold;',
+            data
+          );
+          console.log(`📍 Updated by: ${cloudData.updatedBy || 'unknown'}`);
+          console.log(`⏱️ Last update: ${new Date(data.lastUpdate).toLocaleTimeString('ar-EG')}`);
+          
+          isFirstLoad = false;
         } else {
           // لا توجد بيانات - إنشاء افتراضية
-          console.log('📝 لا توجد بيانات في Firebase، استخدام الافتراضي');
+          console.log('%c📝 No data in Firebase, using defaults', 'color: orange;');
           setLocal(DEFAULT);
           cb(DEFAULT);
           _cloudOk = true;
           
           // محاولة إنشاء بيانات افتراضية
-          set(ref(db, 'config/site'), { ...DEFAULT, lastUpdate: Date.now() }).catch(err => {
-            console.warn('⚠️ Could not initialize default data:', err);
+          set(ref(db, 'config/site'), { ...DEFAULT, lastUpdate: Date.now(), updatedBy: 'init' }).catch(err => {
+            console.warn('%c⚠️ Could not initialize default data:', 'color: orange;', err);
           });
         }
       } catch (err) {
-        console.error('❌ Error processing snapshot:', err);
+        console.error('%c❌ Error processing snapshot:', 'color: red;', err);
       }
     },
     (error) => {
       _cloudOk = false;
-      console.error('❌ خطأ في الاستماع على Firebase:', error);
+      console.error('%c❌ Error in listener:', 'color: red; font-weight: bold;', error);
+      console.log('%c⚠️ Falling back to local data', 'color: orange;');
       
       // fallback محلي
       const local = getLocal();
@@ -220,12 +253,20 @@ export function startCloudListener(cb: (s: SiteSettings) => void) {
   );
 
   return () => {
-    if (_unsubscribe) {
-      _unsubscribe();
-      _unsubscribe = null;
-      console.log('🔴 Listener stopped');
-    }
+    console.log('%c🔴 Listener stopped', 'color: red;');
+    unsubscribe();
   };
+}
+
+// ===== Device ID =====
+function getDeviceId(): string {
+  const key = 'app_device_id';
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = 'dev_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem(key, id);
+  }
+  return id;
 }
 
 // ===== صورة =====

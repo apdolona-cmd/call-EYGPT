@@ -1,23 +1,45 @@
-import { useState } from 'react';
-import { User, Share2, Info, Copy, Check } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { User, Share2, Info, Copy, Check, Image, X } from 'lucide-react';
 import type { SiteSettings } from '../lib/firebase';
 
 interface Props {
   myName: string;
   myNumber: string;
+  myAvatar?: string;
   onNameChange: (name: string) => void;
+  onAvatarChange?: (avatar: string) => void;
   settings: SiteSettings;
 }
 
-export default function SettingsTab({ myName, myNumber, onNameChange, settings }: Props) {
+export default function SettingsTab({ myName, myNumber, myAvatar, onNameChange, onAvatarChange, settings }: Props) {
   const [name, setName] = useState(myName);
+  const [avatar, setAvatar] = useState(myAvatar || '');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const save = () => {
     onNameChange(name.trim());
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setAvatar(dataUrl);
+      onAvatarChange?.(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeAvatar = () => {
+    setAvatar('');
+    onAvatarChange?.('');
   };
 
   const shareLink = () => {
@@ -40,6 +62,36 @@ export default function SettingsTab({ myName, myNumber, onNameChange, settings }
   return (
     <div className="flex flex-col h-full px-4 sm:px-6 pb-4 overflow-y-auto">
       <h2 className="text-lg sm:text-xl font-bold py-3">الإعدادات</h2>
+
+      {/* Avatar */}
+      <div className="bg-white/5 rounded-2xl p-3.5 mb-4 border border-white/5">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${settings.primaryColor}20` }}>
+            <Image size={16} style={{ color: settings.primaryColor }} />
+          </div>
+          <p className="text-sm font-medium text-white">صورتك الشخصية</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {avatar ? (
+            <div className="relative">
+              <img src={avatar} alt="avatar" className="w-12 h-12 rounded-xl object-cover" />
+              <button onClick={removeAvatar} className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs">
+                <X size={12} />
+              </button>
+            </div>
+          ) : (
+            <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-gray-600">
+              <User size={20} />
+            </div>
+          )}
+          <div className="flex-1">
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatarSelect} className="hidden" />
+            <button onClick={() => fileRef.current?.click()} className="px-3 py-2 rounded-lg text-sm text-white" style={{ backgroundColor: settings.primaryColor }}>
+              {avatar ? 'غيّر' : 'أضف صورة'}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Name */}
       <div className="bg-white/5 rounded-2xl p-3.5 mb-4 border border-white/5">

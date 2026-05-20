@@ -6,6 +6,7 @@ interface Props {
   state: CallState;
   remoteName: string;
   remoteNumber: string;
+  remoteAvatar?: string;
   duration: number;
   isMuted: boolean;
   isSpeaker: boolean;
@@ -20,7 +21,7 @@ function fmtDur(s: number): string {
 }
 
 export default function ActiveCallScreen({
-  state, remoteName, remoteNumber, duration,
+  state, remoteName, remoteNumber, remoteAvatar, duration,
   isMuted, isSpeaker, onHangUp, onToggleMute, onToggleSpeaker, settings
 }: Props) {
   const statusText = state === 'calling' ? 'جاري الاتصال...' : state === 'connected' ? fmtDur(duration) : 'انتهت المكالمة';
@@ -34,13 +35,17 @@ export default function ActiveCallScreen({
       <div className="text-center">
         <div className="relative w-24 h-24 sm:w-32 sm:h-32 mx-auto mb-5">
           <div 
-            className="w-full h-full rounded-full flex items-center justify-center text-4xl sm:text-5xl border"
+            className="w-full h-full rounded-full flex items-center justify-center text-4xl sm:text-5xl border overflow-hidden"
             style={{ 
               background: `linear-gradient(135deg, ${settings.primaryColor}25, ${settings.secondaryColor}25)`,
               borderColor: `${settings.primaryColor}20`
             }}
           >
-            {remoteName ? remoteName[0] : '📞'}
+            {remoteAvatar ? (
+              <img src={remoteAvatar} alt={remoteName} className="w-full h-full object-cover" />
+            ) : (
+              remoteName ? remoteName[0] : '📞'
+            )}
           </div>
           {state === 'connected' && (
             <div className="absolute -bottom-1 -left-1 w-7 h-7 rounded-full bg-green-500 border-4 flex items-center justify-center"

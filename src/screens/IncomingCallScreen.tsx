@@ -4,12 +4,13 @@ import type { SiteSettings } from '../lib/firebase';
 interface Props {
   callerName: string;
   callerNumber: string;
+  callerAvatar?: string;
   onAnswer: () => void;
   onReject: () => void;
   settings: SiteSettings;
 }
 
-export default function IncomingCallScreen({ callerName, callerNumber, onAnswer, onReject, settings }: Props) {
+export default function IncomingCallScreen({ callerName, callerNumber, callerAvatar, onAnswer, onReject, settings }: Props) {
   return (
     <div 
       className="min-h-screen min-h-[100dvh] flex flex-col items-center justify-between py-12 sm:py-16 px-4" 
@@ -21,13 +22,17 @@ export default function IncomingCallScreen({ callerName, callerNumber, onAnswer,
 
         <div className="relative w-28 h-28 sm:w-36 sm:h-36 mx-auto mb-6">
           <div 
-            className="w-full h-full rounded-full flex items-center justify-center text-5xl sm:text-6xl border animate-pulse"
+            className="w-full h-full rounded-full flex items-center justify-center text-5xl sm:text-6xl border overflow-hidden animate-pulse"
             style={{ 
               background: `linear-gradient(135deg, ${settings.primaryColor}20, ${settings.secondaryColor}20)`,
               borderColor: `${settings.primaryColor}30`
             }}
           >
-            {callerName ? callerName[0] : '📞'}
+            {callerAvatar ? (
+              <img src={callerAvatar} alt={callerName} className="w-full h-full object-cover" />
+            ) : (
+              callerName ? callerName[0] : '📞'
+            )}
           </div>
         </div>
 

@@ -29,6 +29,8 @@ function getMyNumber(): string {
 export function usePeer() {
   const [myNumber] = useState(getMyNumber);
   const [myName, setMyName] = useState(() => localStorage.getItem('vl_name') || '');
+  const [myAvatar, setMyAvatar] = useState(() => localStorage.getItem('vl_avatar') || '');
+  const [remoteAvatar, setRemoteAvatar] = useState('');
   const [callState, setCallState] = useState<CallState>('idle');
   const [remoteName, setRemoteName] = useState('');
   const [remoteNumber, setRemoteNumber] = useState('');
@@ -57,6 +59,11 @@ export function usePeer() {
   const updateMyName = useCallback((n: string) => {
     setMyName(n);
     localStorage.setItem('vl_name', n);
+  }, []);
+
+  const updateMyAvatar = useCallback((avatar: string) => {
+    setMyAvatar(avatar);
+    localStorage.setItem('vl_avatar', avatar);
   }, []);
 
   const addLog = useCallback((entry: Omit<CallLogEntry, 'id'>) => {
@@ -171,8 +178,16 @@ export function usePeer() {
 
       peer.on('connection', (conn) => {
         conn.on('data', (data) => {
-          const d = data as { type: string; name: string };
-          if (d.type === 'caller-info') setRemoteName(d.name || 'مجهول');
+          const d = data as { type: string; name?: string; avatar?: string; message?: string };
+          if (d.type === 'caller-info') {
+            setRemoteName(d.name || 'مجهول');
+            if (d.avatar) setRemoteAvatar(d.avatar);
+          }
+          // استقبال إشارة إنهاء المكالمة
+          if (d.type === 'call-end') {
+            console.log('الطرف الآخر أنهى المكالمة');
+            cleanup();
+          }
         });
         dataConnRef.current = conn;
       });
@@ -207,10 +222,24 @@ export function usePeer() {
 
       const dc = peerRef.current.connect(targetId);
       dataConnRef.current = dc;
-      dc.on('open', () => { dc.send({ type: 'caller-info', name: myName || 'مجهول' }); });
+      dc.on('open', () => { 
+        dc.send({ 
+          type: 'caller-info', 
+          name: myName || 'مجهول',
+          avatar: myAvatar
+        }); 
+      });
       dc.on('data', (data) => {
-        const d = data as { type: string; name: string };
-        if (d.type === 'callee-info') setRemoteName(d.name || 'مجهول');
+        const d = data as { type: string; name?: string; avatar?: string; message?: string };
+        if (d.type === 'callee-info') {
+          setRemoteName(d.name || 'مجهول');
+          if (d.avatar) setRemoteAvatar(d.avatar);
+        }
+        // استقبال إشارة إنهاء المكالمة من الطرف الآخر
+        if (d.type === 'call-end') {
+          console.log('الطرف الآخر أنهى المكالمة');
+          cleanup();
+        }
       });
 
       const call = peerRef.current.call(targetId, stream);
@@ -252,7 +281,13 @@ export function usePeer() {
       localStreamRef.current = stream;
       callRef.current.answer(stream);
       if (dataConnRef.current) {
-        try { dataConnRef.current.send({ type: 'callee-info', name: myName || 'مجهول' }); } catch {}
+        try { 
+          dataConnRef.current.send({ 
+            type: 'callee-info', 
+            name: myName || 'مجهول',
+            avatar: myAvatar
+          }); 
+        } catch {}
       }
       callRef.current.on('stream', (rs: MediaStream) => {
         if (!remoteAudioRef.current) remoteAudioRef.current = new Audio();
@@ -270,7 +305,7 @@ export function usePeer() {
       setError('يجب السماح بالوصول للميكروفون');
       cleanup();
     }
-  }, [myName, remoteName, remoteNumber, stopRingtone, startTimer, addLog, cleanup]);
+  }, [myName, myAvatar, remoteName, remoteNumber, stopRingtone, startTimer, addLog, cleanup]);
 
   // رفض المكالمة
   const rejectCall = useCallback(() => {
@@ -282,6 +317,23 @@ export function usePeer() {
   // إنهاء المكالمة
   const hangUp = useCallback(() => {
     const dur = Math.floor((Date.now() - startTimeRef.current) / 1000);
+    
+    // إرسال إشارة إغلاق إلى الطرف الآخر
+    try {
+      if (dataConnRef.current && dataConnRef.current.open) {
+        dataConnRef.current.send({ type: 'call-end', message: 'تم إنهاء المكالمة' });
+      }
+    } catch (e) {
+      console.log('Could not send end signal:', e);
+    }
+    
+    // إغلاق الاتصال من جانبنا
+    try {
+      callRef.current?.close();
+    } catch (e) {
+      console.log('Could not close call:', e);
+    }
+    
     if (callStateRef.current === 'connected') {
       addLog({ name: remoteName || remoteNumber, peerId: remoteNumber, type: 'outgoing', duration: dur, timestamp: Date.now() });
     }
@@ -303,8 +355,8 @@ export function usePeer() {
   }, [isSpeaker]);
 
   return {
-    myNumber, myName, updateMyName,
-    callState, remoteName, remoteNumber, callDuration,
+    myNumber, myName, updateMyName, myAvatar, updateMyAvatar,
+    callState, remoteName, remoteNumber, remoteAvatar, callDuration,
     isMuted, isSpeaker, isConnected, error, callLog,
     clearCallLog, makeCall, answerCall, rejectCall, hangUp,
     toggleMute, toggleSpeaker, setError, isLoading,

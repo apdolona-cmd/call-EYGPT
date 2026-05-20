@@ -22,4 +22,4 @@ export type CallState =
   | 'connected'      // المكالمة جارية
   | 'ended';         // المكالمة انتهت
 
-export type AppTab = 'dialer' | 'contacts' | 'history' | 'settings';
+export type AppTab = 'dialer' | 'contacts' | 'history' | 'settings' | 'group';

@@ -173,7 +173,24 @@ export function usePeer() {
         setCallState('ringing');
         setRemoteNumber(incoming.peer.replace('voicelink-', ''));
         playRingtone();
-        incoming.on('close', () => { cleanup(); });
+        
+        // معالج إغلاق المكالمة
+        incoming.on('close', () => {
+          console.log('المكالمة أُغلقت من الطرف الآخر');
+          cleanup();
+        });
+        
+        // استقبال البيانات عبر قناة البيانات
+        incoming.on('data', (data) => {
+          const d = data as { type: string; message?: string };
+          if (d.type === 'call-rejected') {
+            console.log('تم رفض المكالمة');
+            cleanup();
+          } else if (d.type === 'call-end') {
+            console.log('الطرف الآخر أنهى المكالمة');
+            cleanup();
+          }
+        });
       });
 
       peer.on('connection', (conn) => {
@@ -310,6 +327,21 @@ export function usePeer() {
   // رفض المكالمة
   const rejectCall = useCallback(() => {
     stopRingtone();
+    
+    // إرسال إشارة رفض إلى المتصل
+    try {
+      if (callRef.current) {
+        // إرسال عبر قناة البيانات إن وجدت
+        if (dataConnRef.current && dataConnRef.current.open) {
+          dataConnRef.current.send({ type: 'call-rejected', message: 'تم رفض المكالمة' });
+        }
+        // إغلاق المكالمة
+        callRef.current.close();
+      }
+    } catch (e) {
+      console.log('خطأ عند رفض المكالمة:', e);
+    }
+    
     addLog({ name: remoteName || remoteNumber, peerId: remoteNumber, type: 'missed', duration: 0, timestamp: Date.now() });
     cleanup();
   }, [stopRingtone, addLog, remoteName, remoteNumber, cleanup]);
@@ -318,20 +350,23 @@ export function usePeer() {
   const hangUp = useCallback(() => {
     const dur = Math.floor((Date.now() - startTimeRef.current) / 1000);
     
-    // إرسال إشارة إغلاق إلى الطرف الآخر
+    // إرسال إشارات إغلاق متعددة للتأكد من الوصول
     try {
+      // الإشارة 1: عبر قناة البيانات
       if (dataConnRef.current && dataConnRef.current.open) {
-        dataConnRef.current.send({ type: 'call-end', message: 'تم إنهاء المكالمة' });
+        try {
+          dataConnRef.current.send({ type: 'call-end', message: 'تم إنهاء المكالمة' });
+        } catch {}
+      }
+      
+      // الإشارة 2: إغلاق الـ call object
+      if (callRef.current) {
+        try {
+          callRef.current.close();
+        } catch {}
       }
     } catch (e) {
-      console.log('Could not send end signal:', e);
-    }
-    
-    // إغلاق الاتصال من جانبنا
-    try {
-      callRef.current?.close();
-    } catch (e) {
-      console.log('Could not close call:', e);
+      console.log('خطأ عند إنهاء المكالمة:', e);
     }
     
     if (callStateRef.current === 'connected') {

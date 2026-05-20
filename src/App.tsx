@@ -2,13 +2,16 @@ import { useState, useEffect } from 'react';
 import { Phone, Users, Clock, Settings, Copy, Check, Wifi, WifiOff, Shield, X } from 'lucide-react';
 import { usePeer } from './hooks/usePeer';
 import { useSettings } from './hooks/useSettings';
+import { useGroupCall } from './hooks/useGroupCall';
 import type { AppTab } from './types';
 import DialerTab from './tabs/DialerTab';
 import ContactsTab from './tabs/ContactsTab';
 import HistoryTab from './tabs/HistoryTab';
 import SettingsTab from './tabs/SettingsTab';
+import GroupCallTab from './tabs/GroupCallTab';
 import ActiveCallScreen from './screens/ActiveCallScreen';
 import IncomingCallScreen from './screens/IncomingCallScreen';
+import GroupCallScreen from './screens/GroupCallScreen';
 import AdminPanel from './screens/AdminPanel';
 
 interface AppProps {
@@ -18,6 +21,7 @@ interface AppProps {
 function App({ onReady }: AppProps) {
   const peer = usePeer();
   const { settings } = useSettings();
+  const group = useGroupCall();
   const [tab, setTab] = useState<AppTab>('dialer');
   const [copied, setCopied] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -64,6 +68,7 @@ function App({ onReady }: AppProps) {
     { id: 'contacts', icon: Users, label: 'جهات' },
     { id: 'history', icon: Clock, label: 'السجل' },
     { id: 'settings', icon: Settings, label: 'إعدادات' },
+    { id: 'group', icon: Users, label: 'جماعي' },
   ];
 
   // شاشات المكالمات
@@ -74,6 +79,12 @@ function App({ onReady }: AppProps) {
   if (peer.callState === 'calling' || peer.callState === 'connected' || peer.callState === 'ended') {
     return <ActiveCallScreen state={peer.callState} remoteName={peer.remoteName} remoteNumber={peer.remoteNumber} remoteAvatar={peer.remoteAvatar} duration={peer.callDuration}
       isMuted={peer.isMuted} isSpeaker={peer.isSpeaker} onHangUp={peer.hangUp} onToggleMute={peer.toggleMute} onToggleSpeaker={peer.toggleSpeaker} settings={settings} />;
+  }
+
+  // شاشة المكالمة الجماعية
+  if (group.callState === 'calling' || group.callState === 'connected' || group.callState === 'ended') {
+    return <GroupCallScreen state={group.callState} participants={group.participants} duration={group.duration} isMuted={group.isMuted} groupCode={group.groupCode}
+      onHangUp={group.endGroupCall} onToggleMute={group.toggleMute} onAddParticipant={group.addParticipant} onRemoveParticipant={group.removeParticipant} settings={settings} />;
   }
 
   return (
@@ -139,6 +150,7 @@ function App({ onReady }: AppProps) {
         {tab === 'contacts' && <ContactsTab onCall={peer.makeCall} settings={settings} />}
         {tab === 'history' && <HistoryTab logs={peer.callLog} onCall={peer.makeCall} onClear={peer.clearCallLog} settings={settings} />}
         {tab === 'settings' && <SettingsTab myName={peer.myName} myNumber={peer.myNumber} myAvatar={peer.myAvatar} onNameChange={peer.updateMyName} onAvatarChange={peer.updateMyAvatar} settings={settings} />}
+        {tab === 'group' && <GroupCallTab myNumber={peer.myNumber} groupCode={group.groupCode} onCreateGroup={group.createGroup} onJoinGroup={group.joinGroup} onCall={peer.makeCall} settings={settings} />}
       </main>
 
       {/* Nav */}
